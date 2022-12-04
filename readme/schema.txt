@@ -1,0 +1,307 @@
+https://rmoff.net/2019/01/17/confluent-schema-registry-rest-api-cheatsheet/
+
+jq '. | {schema: tojson}' /tmp/example.avsc  | \
+    curl -X POST http://localhost:8081/subjects/my_schema_01-value/versions \
+         -H "Content-Type:application/json" \
+         -d @-
+
+
+Schema-Registry:
+=================
+curl localhost:8081
+
+List Schemas:
+--------------
+curl localhost:8081/subjects
+curl -X GET http://localhost:8081/subjects
+
+Register Schema:
+----------------
+# with Schema:
+curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  --data '{"schema": "{\"type\": \"string\"}"}' \
+   http://localhost:8081/subjects/my-first-schema/versions
+
+# same again:
+curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  --data '{"schema": "{\"type\": \"string\"}"}' \
+   http://localhost:8081/subjects/my-first-schema/versions
+
+#with Json-File:
+jq '. | {schema: tojson}' ./schemas/schema_Person1.txt  | \
+    curl -X POST http://localhost:8081/subjects/my_schema_02/versions \
+         -H "Content-Type:application/json" \
+         -d @-
+
+# same schema, another Version:
+jq '. | {schema: tojson}' ./schemas/schema_Person2.txt  | \
+    curl -X POST http://localhost:8081/subjects/my_schema_02/versions \
+         -H "Content-Type:application/json" \
+         -d @-
+
+
+
+
+# register schema
+echo '{
+    "type": "record",
+    "name": "myrecord",
+    "fields": [
+        {
+            "name": "tags",
+            "type": { "type": "map", "values": "string" }
+        },
+        {
+            "name": "AVG_NOISE_FLOOR_DBM",
+            "type": [ "null", "double" ],
+            "default": null
+        },
+        {
+            "name": "OFDM_ANI_LEVEL_ADJUSTED",
+            "type": [ "null", "int" ],
+            "default": null
+        }
+    ]
+}' | \
+    jq '. | {schema: tojson}' | \
+    curl -X POST http://localhost:8081/subjects/sonos_metrics_avro_01-value/versions \
+         -H "Content-Type:application/json" \
+         -d @-
+
+# register schema from file example.avsc
+jq '. | {schema: tojson}' /tmp/example.avsc  | \
+    curl -X POST http://localhost:8081/subjects/my_schema_01-value/versions \
+         -H "Content-Type:application/json" \
+         -d @-
+
+
+
+
+
+
+# List all subjects
+curl -X GET http://localhost:8081/subjects
+# List all schema versions registered under the subject "my_schema_02"
+curl -X GET http://localhost:8081/subjects/my_schema_02/versions
+
+# Fetch a schema by globally unique id 1
+curl -X GET http://localhost:8081/schemas/ids/1
+
+# Test compatibility of a schema with the latest schema under subject "my-first-schema"
+curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+    --data '{"schema": "{\"type\": \"string\"}"}' \
+    http://localhost:8081/compatibility/subjects/my-first-schema/versions/latest
+
+# Get top level config
+curl -X GET http://localhost:8081/config
+
+# Update compatibility requirements globally
+curl -X PUT -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+   --data '{"compatibility": "NONE"}' \
+   http://localhost:8081/config
+
+# Update compatibility requirements under the subject "Kafka-value"
+curl -X PUT -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+   --data '{"compatibility": "BACKWARD"}' \
+   http://localhost:8081/config/my-first-schema
+
+
+# Show all versions of my_schema_02
+curl http://localhost:8081/subjects/my_schema_02/versions/
+
+# Show version 2 of my_schema_02
+curl http://localhost:8081/subjects/my_schema_02/versions/2
+
+# show the latest version of my_schema_02
+curl http://localhost:8081/subjects/my_schema_02/versions/latest
+
+curl http://localhost:8081/compatibility/subjects/my_schema_02/versions/latest
+
+# Show the schema with id 3
+curl http://localhost:8081/schemas/ids/3
+
+# Delete Schema "Kafka-value" version "1":
+curl -X DELETE http://localhost:8081/subjects/Kafka-value/versions/1
+# Delete latest Schema "Kafka-value":
+curl -X DELETE http://localhost:8081/subjects/Kafka-value/versions/latest
+
+# Check if a schema Is registered under subject “Kafka-key”:
+curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  --data '{"schema": "{\"type\": \"string\"}"}' \
+  http://localhost:8081/subjects/Kafka-key
+
+# List schema types currently registered in Schema Registry
+curl -X GET http://localhost:8081/schemas/types
+
+# List all subject-version pairs where a given ID is used
+curl -X GET http://localhost:8081/schemas/ids/2/versions
+
+# List IDs of schemas that reference a given schema
+curl -X GET http://localhost:8081/subjects/other.proto/versions/1/referencedby
+
+
+
+
+
+
+curl -s "http://localhost:8081/subjects/"
+curl -s "http://localhost:8081/schemas/ids/1"
+curl -s "http://localhost:8081/subjects/my_schema_02/versions/latest"|jq '.'
+curl -s "http://localhost:8081/subjects/my_schema_02/versions/1"|jq '.'
+curl -s "http://localhost:8081/subjects/my_schema_02/versions/"
+curl -s "http://localhost:8081/subjects/my_schema_02/versions/1"|jq '.schema|fromjson'
+curl -s "http://localhost:8081/subjects/my_schema_02/versions/latest"|jq '.schema|fromjson.fields[] | select (.name | contains("last"))'
+
+
+
+
+
+
+
+
+
+
+
+docker exec -it schema-registry-1 kafka-avro-console-producer  --bootstrap-server kafka1.lan:9092 \
+   -topic t1 \
+   --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
+> {"f1":"value1"}
+
+
+docker exec -it schema-registry-1 kafka-avro-console-producer  --bootstrap-server kafka1.lan:9092 \
+  -topic t2 \
+  --property parse.key=true \
+  --property key.schema='{"type":"string"}' \
+  --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
+> {"f1":"value1"}
+
+
+docker exec -it schema-registry-1 kafka-avro-console-consumer --bootstrap-server kafka1.lan:9092 \
+   --from-beginning \
+   --topic t2 \
+   --property schema.registry.url=http://schema-registry-1:8081
+
+docker exec -it schema-registry-1 kafka-avro-console-producer --bootstrap-server kafka1.lan:9092 --topic t2 \
+  --property parse.key=true \
+  --property "key.separator= "\
+  --property key.schema='{"type":"string"}' \
+  --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}' \
+  --property schema.registry.url=http://localhost:8081
+
+
+docker exec -it schema-registry-1 kafka-avro-console-consumer --topic t2 \
+  --bootstrap-server kafka1.lan:9092 \
+  --property print.key=true \
+  --key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
+
+
+
+
+
+
+# Examples:
+# -----------
+
+{
+ "namespace": "io.confluent.examples.clients.basicavro",
+ "type": "record",
+ "name": "Payment",
+ "fields": [
+     {"name": "id", "type": "string"},
+     {"name": "amount", "type": "double"}
+ ]
+}
+
+
+
+{
+ "namespace": "io.confluent.examples.clients.basicavro",
+ "type": "record",
+ "name": "Payment",
+ "fields": [
+     {"name": "id", "type": "string"},
+     {"name": "amount", "type": "double"},
+     {"name": "region", "type": "string", "default": ""}
+ ]
+}
+
+
+{"namespace": "barbers.avro",
+ "type": "record",
+ "name": "person",
+ "fields": [
+     {"name": "name", "type": "string"},
+     {"name": "age",  "type": "int"},
+     {"name": "location", "type": "string", "default": "uk"}
+ ]
+}
+
+
+{
+ "schema": "{
+              \"type\":\"record\",
+              \"name\":\"Payment\",
+              \"namespace\":\"my.examples\",
+              \"fields\":[{
+                           \"name\":\"id\",
+                           \"type\":\"string\"
+              }]
+            }",
+ "schemaType": "AVRO"
+}
+
+
+{
+" type " : "record",
+" namespace " : "Tutorialspoint",
+" name " : "Employee",
+" fields " : [
+ { "name" : " Name" , "type" : "string" },
+ { "name" : "age" , "type" : "int" }
+ ]
+}
+
+
+{
+   "type" : "enum",
+   "name" : "Numbers",
+   "namespace": "data",
+   "symbols" : [ "ONE", "TWO", "THREE", "FOUR" ]
+}
+
+
+{ " type " : " array ", " items " : " int " }
+
+
+{"type" : "map", "values" : "int"}
+
+
+{
+   "type" : "record",
+   "namespace" : "tutorialspoint",
+   "name" : "empdetails ",
+   "fields" :
+   [ 
+      { "name" : "experience", "type": ["int", "null"] }, { "name" : "age", "type": "int" }
+   ] 
+}
+
+
+
+{ "type" : "fixed" , "name" : "bdata", "size" : 1048576}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

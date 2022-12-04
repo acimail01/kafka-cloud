@@ -1,0 +1,79 @@
+docker-compose logs zookeeper-1 | grep -i binding
+docker-compose logs kafka-1     | grep -i started
+
+
+
+List Metadata:
+---------------
+docker run -it --rm  --network host           edenhill/kcat:1.7.1   -b      localhost:9092 -L
+docker run -it --rm  --network host           edenhill/kcat:1.7.1   -b 192.168.94.131:9092 -L
+docker run -it --rm  --network host           edenhill/kcat:1.7.1   -b     kafka3.lan:9092 -L
+docker run -it --rm  --network kafka_net      edenhill/kcat:1.7.1   -b 192.168.94.131:9092 -L
+docker run -it --rm  --network kafka_network  edenhill/kcat:1.7.1   -b 192.168.94.131:9092 -L
+
+docker run --tty --network host  confluentinc/cp-kafkacat  kafkacat -b     localhost:19092 -L
+docker run --tty --network host  confluentinc/cp-kafkacat  kafkacat -b      localhost:9092 -L
+docker run --tty --network host  confluentinc/cp-kafkacat  kafkacat -b 192.168.94.131:9092 -L
+docker run --tty --network host  confluentinc/cp-kafkacat  kafkacat -b     kafka3.lan:9092 -L
+
+
+Create Topics:
+---------------
+docker-compose exec kafka-1 kafka-topics --bootstrap-server kafka1.lan:9092 --partitions 1 --replication-factor 1 \
+   --create --topic topic12 --if-not-exists
+
+
+List Topics:
+-------------  
+docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --list
+
+
+Producer: Console
+-------------------
+docker exec -it kafka-1 kafka-console-producer --bootstrap-server localhost:9092 --topic topic12
+
+
+Print Topic:
+-------------
+docker run --tty --network host  confluentinc/cp-kafkacat  kafkacat \
+        -b kafka3.lan:9092 \
+        -C \
+        -t topic12
+
+
+
+Producing messages from a file on the host machine:
+---------------------------------------------------
+docker run --network host \
+           --volume /tmp/my_msgs.txt:/data/my_msgs.txt \
+             confluentinc/cp-kafkacat kafkacat \
+           -b kafka1.lan:9092 \
+           -t topic13 \
+           -P \ 
+           -l /data/my_msgs.txt
+
+
+
+Consuming messages from a topic:
+---------------------------------
+docker run --tty --network host  confluentinc/cp-kafkacat kafkacat \
+   -b kafka1.lan:9092 -C \
+   -K: -f 'Key (%K bytes): %k\t\nValue (%S bytes): %s\n\Partition: %p\tOffset: %o\n--\n' \
+   -t topic13
+
+
+
+Producing messages inline from a script:
+----------------------------------------
+docker run --interactive \
+           --network host \
+           confluentinc/cp-kafkacat \
+           kafkacat -b kafka1.lan:9092 \
+                    -t test14 \
+                    -K: \
+                    -P <<EOF
+1:FOO
+2:BAR
+EOF
+
+

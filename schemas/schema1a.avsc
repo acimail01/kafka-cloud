@@ -1,0 +1,12 @@
+{
+  "schema": "{
+     \"type\"   :\"record\", 
+     \"name\"   :\"transaction_record\",
+     \"fields\" :[
+         { \"name\": \"customer_name\",  \"type\":\"string\"  },
+         { \"name\": \"order\",          \"type\":\"string\"  },
+         { \"name\": \"cost\",           \"type\":\"float\"   },
+         { \"name\": \"new_customer\",   \"type\":\"boolean\" }
+     ]
+  }"
+}

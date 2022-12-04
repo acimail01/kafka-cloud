@@ -1,0 +1,282 @@
+# Sample CURL : Publish Binary Message
+curl --location --request POST 'http://localhost:8082/topics/my-topic-from-api-binary' \
+--header 'Content-Type: application/vnd.kafka.binary.v2+json' \
+--data-raw '{
+    "records": [{
+        "key": "YWJj",
+        "value": "eyJhbmltYWwiOiJkb2cifQ=="
+    }]
+}'
+
+# Sample CURL : Publish JSON Message
+curl --location --request POST 'http://localhost:8082/topics/my-topic-from-api-json' \
+--header 'Content-Type: application/vnd.kafka.json.v2+json' \
+--data-raw '{
+    "records": [
+        {
+            "key": "this record has key",
+            "value": { "name": "Steve Rogers", "gender": "MALE" }
+        },
+        {
+            "value": [
+                { "name": "Anna", "gender": "FEMALE"},
+                { "name": "Olaf", "gender": "MALE" }
+            ]
+        },
+        {
+            "key":"this is another record key", 
+            "value": [109, 289, 442]
+        }
+    ]
+}'
+
+
+# Sample CURL : Publish Avro Message
+# create schema and data
+curl --location --request POST 'http://localhost:8082/topics/my-topic-from-api-avro' \
+--header 'Content-Type: application/vnd.kafka.avro.v2+json' \
+--data-raw '{
+    "value_schema": "{\"type\":\"record\", \"name\":\"MySchema\", \"fields\":[{\"name\":\"field1\", \"type\":\"string\"}]}",
+    "records": [
+        {
+            "value": {
+                "field1": "A sample"
+            }
+        }
+    ]
+}'
+
+# use schema-id
+curl --location --request POST 'http://localhost:8082/topics/my-topic-from-api' \
+--header 'Content-Type: application/vnd.kafka.avro.v2+json' \
+--data-raw '{
+    "value_schema_id": 11,
+    "records": [
+        {
+            "value": {
+                "field1": "this is another value for field1"
+            }
+        }
+    ]
+}'
+
+
+#What about consuming using Kafka REST Proxy? Consuming from API needs several steps, all through REST API :
+#
+#   1.  Create consumer
+#   2.  Subscribe this consumer to certain topic
+#   3.  Start consuming
+
+
+# Sample CURL : Consume Binary Message
+# 1. Create Consumer
+curl --location --request POST 'http://localhost:8082/consumers/myConsumerGroupFromApi' \
+--header 'Content-Type: application/vnd.kafka.binary.v2+json' \
+--data-raw '{
+    "name": "avroConsumerFromApi-binary",
+    "format": "binary",
+    "auto.offset.reset": "earliest",
+    "auto.commit.enable": "true"
+}'
+# 2. Subscribe to topic
+curl --location --request POST 'http://localhost:8082/consumers/myConsumerGroupFromApi/instances/avroConsumerFromApi-binary/subscription' \
+--header 'Content-Type: application/vnd.kafka.binary.v2+json' \
+--data-raw '{
+    "topics": [
+        "my-topic-from-api-binary"
+    ]
+}'
+# 3. Consume from topic
+curl --location --request GET 'http://localhost:8082/consumers/myConsumerGroupFromApi/instances/avroConsumerFromApi-binary/records' \
+--header 'Accept: application/vnd.kafka.binary.v2+json'
+
+
+
+
+
+
+
+
+# 1. Create Consumer
+curl --location --request POST 'http://localhost:8082/consumers/myConsumerGroupFromApi' \
+--header 'Content-Type: application/vnd.kafka.json.v2+json' \
+--data-raw '{
+    "name": "avroConsumerFromApi-json",
+    "format": "json",
+    "auto.offset.reset": "earliest",
+    "auto.commit.enable": "true"
+}'
+# 2. Subscribe to topic
+curl --location --request POST 'http://localhost:8082/consumers/myConsumerGroupFromApi/instances/avroConsumerFromApi-json/subscription' \
+--header 'Content-Type: application/vnd.kafka.json.v2+json' \
+--data-raw '{
+    "topics": [
+        "my-topic-from-api-json"
+    ]
+}'
+# 3. Consume from topic
+curl --location --request GET 'http://localhost:8082/consumers/myConsumerGroupFromApi/instances/avroConsumerFromApi-json/records' \
+--header 'Accept: application/vnd.kafka.json.v2+json'
+
+
+# Sample CURL : Consume Avro Message
+# 1. Create Consumer
+curl --location --request POST 'http://localhost:8082/consumers/myConsumerGroupFromApi' \
+--header 'Content-Type: application/vnd.kafka.avro.v2+json' \
+--data-raw '{
+    "name": "avroConsumerFromApi-avro",
+    "format": "avro",
+    "auto.offset.reset": "earliest",
+    "auto.commit.enable": "true"
+}'
+
+# 2. Subscribe to topic
+curl --location --request POST 'http://localhost:8082/consumers/myConsumerGroupFromApi/instances/avroConsumerFromApi-avro/subscription' \
+--header 'Content-Type: application/vnd.kafka.avro.v2+json' \
+--data-raw '{
+    "topics": [
+        "my-topic-from-api-avro"
+    ]
+}'
+
+# 3. Consume from topic
+curl --location --request GET 'http://localhost:8082/consumers/myConsumerGroupFromApi/instances/avroConsumerFromApi-avro/records' \
+--header 'Accept: application/vnd.kafka.avro.v2+json'
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------
+# In this example, the producer application writes Kafka data to a topic in your Kafka cluster. 
+# If the topic does not already exist in your Kafka cluster, the producer application will use the Kafka Admin Client API to create the topic. 
+# Each record written to Kafka has a key representing a username (for example, alice) and a value of a count, 
+# formatted as json (for example, {"count": 0}). 
+# The consumer application reads the same Kafka topic and keeps a rolling sum of the count as it processes each record.
+
+
+
+curl -X GET "http://localhost:8082/v3/clusters/"
+docker-compose exec rest-proxy-1 curl -X GET "http://localhost:8082/v3/clusters/"
+docker-compose exec rest-proxy-1 curl -X GET "http://localhost:8082/v3/clusters/" | jq -r ".data[0].cluster_id"
+
+# Get the Kafka cluster ID that the REST Proxy is connected to.
+KAFKA_CLUSTER_ID=$(docker-compose exec rest-proxy-1 curl -X GET "http://localhost:8082/v3/clusters/" | jq -r ".data[0].cluster_id")
+# Create the Kafka topic test1
+docker-compose exec rest-proxy-1 curl -X POST \
+     -H "Content-Type: application/json" \
+     -d "{\"topic_name\":\"test1\",\"partitions_count\":6,\"configs\":[]}" \
+     "http://localhost:8082/v3/clusters/${KAFKA_CLUSTER_ID}/topics" | jq .
+# Produce three JSON messages to the topic, with key alice, and values {"count":0}, {"count":1}, and {"count":2}.
+docker-compose exec rest-proxy-1 curl -X POST \
+     -H "Content-Type: application/vnd.kafka.json.v2+json" \
+     -H "Accept: application/vnd.kafka.v2+json" \
+     --data '{"records":[{"key":"alice","value":{"count":0}},{"key":"alice","value":{"count":1}},{"key":"alice","value":{"count":2}}]}' \
+     "http://localhost:8082/topics/test1" | jq .
+
+# Consume Records
+#-----------------
+# Create a consumer ci1 belonging to consumer group cg1. Specify auto.offset.reset to be earliest so it starts at the beginning of the topic.
+docker-compose exec rest-proxy-1 curl -X POST \
+     -H "Content-Type: application/vnd.kafka.v2+json" \
+     --data '{"name": "ci1", "format": "json", "auto.offset.reset": "earliest"}' \
+     http://localhost:8082/consumers/cg1 | jq .
+# Subscribe the consumer to topic test1.
+docker-compose exec rest-proxy-1 curl -X POST \
+     -H "Content-Type: application/vnd.kafka.v2+json" \
+     --data '{"topics":["test1"]}' \
+     http://localhost:8082/consumers/cg1/instances/ci1/subscription | jq .
+# Consume data using the base URL in the first response. 
+# Issue the curl command twice, sleeping 10 seconds in between—this is intentional due to https://github.com/confluentinc/kafka-rest/issues/432.
+
+docker-compose exec rest-proxy-1 curl -X GET \
+     -H "Accept: application/vnd.kafka.json.v2+json" \
+     http://localhost:8082/consumers/cg1/instances/ci1/records | jq .
+
+sleep 10
+
+docker-compose exec rest-proxy-1 curl -X GET \
+     -H "Accept: application/vnd.kafka.json.v2+json" \
+     http://localhost:8082/consumers/cg1/instances/ci1/records | jq .
+# Delete the consumer instance to clean up its resources
+docker-compose exec rest-proxy-1 curl -X DELETE \
+     -H "Content-Type: application/vnd.kafka.v2+json" \
+     http://localhost:8082/consumers/cg1/instances/ci1 | jq .
+
+--------------
+
+# Create the Kafka topic test2 using the AdminClient functionality of the REST Proxy API v3.
+docker-compose exec rest-proxy-1 curl -X POST \
+     -H "Content-Type: application/json" \
+     -d "{\"topic_name\":\"test2\",\"partitions_count\":6,\"configs\":[]}" \
+     "http://localhost:8082/v3/clusters/${KAFKA_CLUSTER_ID}/topics" | jq .
+# Register a new Avro schema for topic test2 with the Confluent Cloud Schema Registry.
+curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  --data '{ "schema": "[ { \"type\":\"record\", \"name\":\"countInfo\", \"fields\": [ {\"name\":\"count\",\"type\":\"long\"}]} ]" }' \
+   "http://localhost:8081/subjects/test2-value/versions"
+# schema ID
+schemaid=$(curl -s -X GET "http://localhost:8081/subjects/test2-value/versions/latest" | jq '.id')
+# Produce three Avro messages to the topic, with values {"count":0}, {"count":1}, and {"count":2}. 
+# Notice that the request body includes the schema ID.
+curl -s -X POST \
+     -H "Content-Type: application/vnd.kafka.avro.v2+json" \
+     -H "Accept: application/vnd.kafka.v2+json" \
+     --data '{"value_schema_id": '"$schemaid"', "records": [{"value": {"countInfo":{"count": 0}}},{"value": {"countInfo":{"count": 1}}},{"value": {"countInfo":{"count": 2}}}]}' \
+     "http://localhost:8082/topics/test2" | jq .
+
+# Consume Avro Records
+# ----------------------
+# Create a consumer ci2 belonging to consumer group cg2. Specify auto.offset.reset to be earliest so it starts at the beginning of the topic.
+curl -s -X POST \
+   -H "Content-Type: application/vnd.kafka.v2+json" \
+   --data '{"name": "ci2", "format": "avro", "auto.offset.reset": "earliest"}' \
+   http://localhost:8082/consumers/cg2 | jq .
+# Subscribe the consumer to topic test2.
+curl -s -X POST \
+     -H "Content-Type: application/vnd.kafka.v2+json" \
+     --data '{"topics":["test2"]}' \
+     http://localhost:8082/consumers/cg2/instances/ci2/subscription | jq .
+# Consume data using the base URL in the first response. 
+# Issue the curl command twice, sleeping 10 seconds in between—this is intentional due to https://github.com/confluentinc/kafka-rest/issues/432.
+curl -s -X GET \
+     -H "Accept: application/vnd.kafka.avro.v2+json" \
+     http://localhost:8082/consumers/cg2/instances/ci2/records | jq .
+
+sleep 10
+
+curl -s -X GET \
+     -H "Accept: application/vnd.kafka.avro.v2+json" \
+     http://localhost:8082/consumers/cg2/instances/ci2/records | jq .
+
+# Delete the consumer instance to clean up its resources
+curl -s -X DELETE \
+     -H "Content-Type: application/vnd.kafka.v2+json" \
+     http://localhost:8082/consumers/cg2/instances/ci2 | jq .
+
+----------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+# Get all topic
+curl "http://localhost:8082/topics"
+# Get info about one topic
+curl "http://localhost:8082/topics/mytopic01" | jq
+# Produce a message with JSON data
+curl -X POST -H "Content-Type: application/vnd.kafka.json.v2+json" \
+    --data '{"records":[{"value":{"name": "testUser"}}]}' \
+    "http://localhost:8082/topics/jsontest"
+
+# Create a consumer for JSON data, starting at the beginning of the topic's
+# log. The consumer group is called "my_json_consumer" and the instance is "my_consumer_instance".
+curl -X POST -H "Content-Type: application/vnd.kafka.v2+json" -H "Accept: application/vnd.kafka.v2+json" \
+    --data '{"name": "my_consumer_instance", "format": "json", "auto.offset.reset": "earliest"}' \
+    http://localhost:8082/consumers/my_json_consumer
+
+# Subscribe the consumer to a topic
+curl -X POST -H "Content-Type: application/vnd.kafka.v2+json" --data '{"topics":["jsontest"]}' \
+    http://localhost:8082/consumers/my_json_consumer/instances/my_consumer_instance/subscription
+
+# Then consume some data from a topic using the base URL in the first response.
+curl -X GET -H "Accept: application/vnd.kafka.json.v2+json" \
+    http://localhost:8082/consumers/my_json_consumer/instances/my_consumer_instance/records
+# Finally, close the consumer with a DELETE to make it leave the group and clean up its resources.
+curl -X DELETE -H "Accept: application/vnd.kafka.v2+json" \
+    http://localhost:8082/consumers/my_json_consumer/instances/my_consumer_instance

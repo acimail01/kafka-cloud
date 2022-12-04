@@ -1,0 +1,374 @@
+curl -X POST -s -H "Content-Type: application/vnd.schemaregistry.v1+json" --data @schema1b.avsc http://localhost:8081/subjects/MyAvroSchema/versions
+
+
+
+# Produce a message using Avro embedded data, including the schema which will
+# be registered with schema registry and used to validate and serialize
+# before storing the data in Kafka
+curl -X POST -H "Content-Type: application/vnd.kafka.avro.v2+json" \
+      -H "Accept: application/vnd.kafka.v2+json" \
+      --data '{"value_schema": "{\"type\": \"record\", \"name\": \"User\", \"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}", "records": [{"value": {"name": "testUser"}}]}' \
+      "http://localhost:8082/topics/avrotest"
+
+
+curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data @schema1.avsc localhost:8081/subjects/subject1/versions
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+{
+ "namespace": "io.confluent.examples.clients.basicavro",
+ "type": "record",
+ "name": "Payment",
+ "fields": [
+     {"name": "id", "type": "string"},
+     {"name": "amount", "type": "double"}
+ ]
+}
+
+
+curl -s \
+  -X POST \
+  "http://localhost:8081/subjects/sensor-value/versions" \
+  -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  -d '{"schema": "{\"type\":\"record\",\"name\":\"sensor_sample\",\"fields\":[{\"name\":\"timestamp\",\"type\":\"long\",\"logicalType\":\"timestamp-millis\"},{\"name\":\"identifier\",\"type\":\"string\",\"logicalType\":\"uuid\"},{\"name\":\"value\",\"type\":\"long\"}]}"}' \
+  | jq
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+cat schema1.avsc
+-----------------
+{
+ "type"   : "record",
+ "name"   : "transaction_record",
+ "fields" : [
+    { "name":"customer_name", "type":"string"  },
+    { "name":"order",         "type":"string"  },
+    { "name":"cost",          "type":"float"   },
+    { "name":"new_customer",  "type":"boolean" }
+ ]
+}
+
+jq '. | {schema: tojson}' schema1.avsc  | \
+    curl -X POST http://localhost:8081/subjects/my_schema_01/versions \
+         -H "Content-Type:application/json" \
+         -d @-
+
+
+Create Topic:
+--------------
+docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --create --topic myschema1 --partitions 3 --replication-factor 1
+
+
+AVRO-Producer:
+---------------
+docker exec -it schema-registry-1 kafka-avro-console-producer \
+   --topic myschema1 \
+   --broker-list kafka1.lan:9092 \
+   --property value.schema.id=8
+
+Alternative:
+------------
+docker exec -it schema-registry-1 kafka-avro-console-producer \
+   --topic myschema1 \
+   --broker-list kafka1.lan:9092 \
+   --property value.schema="$(< ./schema1.avsc)"
+
+
+
+
+
+AVRO-Consumer:
+--------------
+docker exec -it schema-registry-1 kafka-avro-console-consumer --bootstrap-server kafka1.lan:9092 --topic myschema1 --from-beginning
+
+
+Good Data:
+{"customer_name":"Archita","order":"kesarpista","cost":60.7,"new_customer":false}
+{"customer_name":"Ritika","order":"strawberry","cost":30,"new_customer":true}
+Error Data:
+{"customer_name":"Ritika","order":"strawberry","cost":30}
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+Create the Kafka topic 
+Create a schema for your records
+Start a console consumer
+Produce events to the Kafka topic
+
+{
+"type": "record",
+"namespace": "io.confluent.tutorial",
+"name": "OrderDetail",
+"fields": [
+    {"name": "number", "type": "long", "doc": "The order number."},
+    {"name": "date", "type": "long", "logicalType": "date", "doc": "The date the order was submitted."},
+    {"name": "ship_addr", "type": "string", "doc": "The shipping address."},
+    {"name": "subtotal", "type": "double", "doc": "The amount without shipping cost and tax."},
+    {"name": "shipping_cost", "type": "double", "doc": "The shipping cost."},
+    {"name": "tax", "type": "double", "doc": "The applicable tax."},
+    {"name": "grand_total", "type": "double", "doc": "The order grand total ."}
+    ]
+}
+
+{"number":1,"date":18500,"ship_addr":"ABC Sesame Street,Wichita, KS. 12345","subtotal":110.00,"tax":10.00,"grand_total":120.00,"shipping_cost":0.00}
+{"number":2,"date":18501,"ship_addr":"123 Cross Street,Irving, CA. 12345","subtotal":5.00,"tax":0.53,"grand_total":6.53,"shipping_cost":1.00}
+{"number":3,"date":18502,"ship_addr":"5014 Pickinick Street, Portland, WA. 97205","subtotal":93.45,"tax":9.34,"grand_total":102.79,"shipping_cost":0.00}
+{"number":4,"date":18503,"ship_addr":"4082 Elmwood Avenue, Tempe, AX. 85281","subtotal":50.00,"tax":1.00,"grand_total":51.00,"shipping_cost":0.00}
+{"number":5,"date":18504,"ship_addr":"123 Cross Street,Irving, CA. 12345","subtotal":33.00,"tax":3.33,"grand_total":38.33,"shipping_cost":2.00}
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --create --topic orders1 --partitions 3 --replication-factor 1
+
+docker exec -it kafka-1 kafka-console-producer --bootstrap-server localhost:9092 --topic orders1
+docker exec -it kafka-1 kafka-console-consumer --bootstrap-server localhost:9092 --topic orders1 --from-beginning
+
+
+docker exec -it kafka-1 kafka-console-producer --bootstrap-server localhost:9092  --topic orders1 \
+  --property "parse.key=true" \
+  --property "key.separator=:"
+
+docker exec -it kafka-1 kafka-console-consumer --bootstrap-server localhost:9092 --topic orders1 --from-beginning --property print.key=true
+
+{"number":1,"date":18500,"ship_addr":"ABC Sesame Street,Wichita, KS. 12345","subtotal":110.00,"tax":10.00,"grand_total":120.00,"shipping_cost":0.00}
+{"number":2,"date":18501,"ship_addr":"123 Cross Street,Irving, CA. 12345","subtotal":5.00,"tax":0.53,"grand_total":6.53,"shipping_cost":1.00}
+{"number":3,"date":18502,"ship_addr":"5014  Pickinick Street, Portland, WA. 97205","subtotal":93.45,"tax":9.34,"grand_total":102.79,"shipping_cost":0.00}
+{"number":4,"date":18503,"ship_addr":"4082 Elmwood Avenue, Tempe, AX. 85281","subtotal":50.00,"tax":1.00,"grand_total":51.00,"shipping_cost":0.00}
+{"number":5,"date":18504,"ship_addr":"123 Cross Street,Irving, CA. 12345","subtotal":33.00,"tax":3.33,"grand_total":38.33,"shipping_cost":2.00}
+
+
+String producer and consumer
+=============================
+
+Simple without key
+------------------
+Create topic:
+docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --create --topic SimpleWithoutKey --partitions 3 --replication-factor 1
+Start kafka-console-producer which will produce simple string messages:
+docker exec -it kafka-1 kafka-console-producer --broker-list localhost:9092 --topic SimpleWithoutKey
+
+Produce messages like:
+hello
+world
+
+Start kafka-console-consumer to consume simple string messages:
+docker exec -it kafka-1 kafka-console-consumer --bootstrap-server localhost:9092 --topic SimpleWithoutKey --from-beginning
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+
+Simple with string key
+----------------------
+Create topic:
+docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --create --topic SimpleWithStringKey --partitions 3 --replication-factor 1
+Start kafka-console-producer which will produce simple string messages with string key:
+docker exec -it kafka-1 kafka-console-producer --broker-list localhost:9092 --topic SimpleWithStringKey \
+  --property parse.key=true \
+  --property key.separator=:
+
+Notes:
+    --property parse.key=true our consumer will expect us to enter key along side value
+    --property key.separator=: is optional and by default is space
+Start kafka-console-consumer to consume simple string messages with string key
+
+docker exec -it kafka-1 kafka-console-consumer --bootstrap-server localhost:9092 --topic SimpleWithStringKey \
+  --property print.key=true \
+  --from-beginning
+
+Notes:
+    --property print.key=true will print key
+
+Produce messages like:
+1:one
+2:two
+
+
+If you try to produce message without key you should see an error.
+---------------------------------------------------------------------------------------------------------------------------------------------------
+Simple with integer key
+-----------------------
+Create topic:
+docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --create --topic SimpleWithIntKey --partitions 3 --replication-factor 1
+
+Start kafka-console-producer which will produce simple string messages with integer key:
+docker exec -it kafka-1 kafka-console-producer --broker-list localhost:9092 --topic SimpleWithIntKey \
+  --property parse.key=true \
+  --property key.serializer=org.apache.kafka.common.serialization.IntegerDeserializer \
+  --property value.serializer=org.apache.kafka.common.serialization.StringDeserializer \
+  --property key.separator=:
+
+docker exec -it kafka-1 kafka-console-consumer --bootstrap-server localhost:9092 --topic SimpleWithIntKey \
+  --property print.key=true \
+  --from-beginning \
+  --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
+  --property value.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
+  --skip-message-on-error
+
+Produce messages like:
+1:one
+2:two
+---------------------------------------------------------------------------------------------------------------------------------------------------
+
+Json producer and consumer
+==========================
+Json without key
+----------------
+Create topic:
+docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --create --topic JsonWithoutKey --partitions 3 --replication-factor 1
+
+Start kafka-console-producer which will produce json messages:
+docker exec -it kafka-1 kafka-console-producer --broker-list localhost:9092 --topic JsonWithoutKey
+
+Start kafka-console-consumer to consume json messages:
+docker exec -it kafka-1 kafka-console-consumer --bootstrap-server localhost:9092 --topic JsonWithoutKey \
+  --property value.deserializer=org.apache.kafka.connect.json.JsonDeserializer \
+  --skip-message-on-error \
+  --from-beginning \
+  --property print.timestamp=true
+
+Produce json messages like:
+{"foo": "bar"}
+{"acme": 42}
+{"myarray": [123,33], "name": "max"}
+
+And you should see them like:
+CreateTime:1578081298745        {"foo":"bar"}
+CreateTime:1578081304001        {"acme":42}
+CreateTime:1578081580427	{"myarray":[123,33],"name":"max"}
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+Json with string key
+----------------------
+Create topic:
+docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --create --topic JsonWithStringKey --partitions 3 --replication-factor 1
+
+Start kafka-console-producer which will produce json messages with string key
+docker exec -it kafka-1 kafka-console-producer --broker-list localhost:9092 --topic JsonWithStringKey \
+  --property parse.key=true \
+  --property key.separator=:
+
+Start kafka-console-consumer to consume json messages with string key:
+docker exec -it kafka-1 kafka-console-consumer --bootstrap-server localhost:9092 --topic JsonWithStringKey \
+  --property print.key=true \
+  --from-beginning \
+  --property value.deserializer=org.apache.kafka.connect.json.JsonDeserializer
+
+Produce messages:
+1:{"foo":"bar"}
+2:{"acme":42}
+---------------------------------------------------------------------------------------------------------------------------------------------------
+Json with json key
+------------------
+Create topic:
+docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --create --topic JsonWithJsonKey --partitions 3 --replication-factor 1
+
+Start kafka-console-producer which will produce json messages with json keys:
+docker exec -it kafka-1 kafka-console-producer --broker-list localhost:9092 --topic JsonWithJsonKey \
+  --property parse.key=true \
+  --property key.separator="|"
+
+Start kafka-console-consumer to consume json messages:
+docker exec -it kafka-1 kafka-console-consumer --bootstrap-server localhost:9092 --topic JsonWithJsonKey  \
+  --property value.deserializer=org.apache.kafka.connect.json.JsonDeserializer \
+  --property key.deserializer=org.apache.kafka.connect.json.JsonDeserializer \
+  --skip-message-on-error \
+  --from-beginning \
+  --property print.key=true
+
+Produce messages:
+{"id":1}|{"foo":"bar"}
+{"id":2}|{"acme":42}
+---------------------------------------------------------------------------------------------------------------------------------------------------
+Avro producer and consumer
+==========================
+Avro without key
+----------------
+docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --create --topic AvroWithoutKey --partitions 6 --replication-factor 3
+
+docker exec -it schema-registry-1 kafka-avro-console-producer \
+   --topic AvroWithoutKey \
+   --broker-list kafka1.lan:9092 \
+   --property value.schema='{"type":"record","name":"AvroWithoutKey","fields":[{"name":"foo","type":"string"}]}'
+
+docker exec -it schema-registry-1 kafka-avro-console-consumer --bootstrap-server kafka1.lan:9092 --topic AvroWithoutKey --from-beginning
+
+Try sending something like:
+{"foo":"hello"}
+{"foo":"world"}
+---------------------------------------------------------------------------------------------------------------------------------------------------
+Avro with string key
+---------------------
+Create topic:
+docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --create --topic AvroWithStringKey --partitions 3 --replication-factor 1
+
+Start kafka-avro-console-producer to produce avro messages with primitive string key:
+docker exec -it schema-registry-1 kafka-avro-console-producer --broker-list kafka1.lan:9092 --topic AvroWithStringKey \
+  --property value.schema='{"type":"record","name":"AvroWithStringKey","fields":[{"name":"foo","type":"string"}]}' \
+  --property parse.key=true \
+  --property key.schema='{"type":"string"}' \
+  --property key.separator=" "
+
+Start kafka-avro-console-consumer to consume avro messages with string keys:
+docker exec -it schema-registry-1 kafka-avro-console-consumer --bootstrap-server kafka1.lan:9092 --topic AvroWithStringKey \
+  --from-beginning \
+  --property print.key=true \
+  --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer
+
+Try send something like:
+"one" {"foo":"1"}
+"two" {"foo":"2"}
+---------------------------------------------------------------------------------------------------------------------------------------------------
+Avro with int key
+-------------------
+Create topic:
+docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --create --topic AvroWithIntKey --partitions 3 --replication-factor 1
+
+Start kafka-avro-console-producer to produce avro messages with integer keys:
+docker exec -it schema-registry-1 kafka-avro-console-producer --broker-list kafka1.lan:9092 --topic AvroWithIntKey \
+  --property value.schema='{"type":"record","name":"AvroWithIntKey","fields":[{"name":"foo","type":"int"}]}' \
+  --property key.separator="|"
+
+Start kafka-avro-console-consumer to consume avro messages:
+docker exec -it schema-registry-1 kafka-avro-console-consumer --bootstrap-server kafka1.lan:9092 --topic AvroWithIntKey --from-beginning
+
+Try send something like:
+{"foo":1}
+{"foo":422}
+---------------------------------------------------------------------------------------------------------------------------------------------------
+Avro with avro key
+------------------
+Create topic:
+docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --create --topic AvroWithAvroKey --partitions 3 --replication-factor 1
+
+Start kafka-avro-console-producer which will produce avro messages with avro keys:
+docker exec -it schema-registry-1 kafka-avro-console-producer --broker-list kafka1.lan:9092 --topic AvroWithAvroKey \
+  --property value.schema='{"type":"record", "name": "AvroWithAvroKey", "fields":[{"name":"foo","type":"string"}]}' \
+  --property parse.key=true \
+  --property key.schema='{"type":"record","name": "key", "fields":[{"name":"id","type":"int"}]}' \
+  --property key.separator=" "
+
+Start kafka-avro-console-consumer to consume avro messages with avro keys:
+docker exec -it schema-registry-1 kafka-avro-console-consumer --bootstrap-server kafka1.lan:9092 --topic AvroWithAvroKey \
+  --from-beginning \
+  --property print.key=true
+
+Try send
+{"id":1} {"foo":"hello"}
+{"id":2} {"foo":"world"}
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
